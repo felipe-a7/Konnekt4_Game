@@ -14,14 +14,14 @@ class EnvConnect4(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 "board": gym.spaces.MultiDiscrete([3] * (self.num_rows * self.num_cols)),
-                "turn": gym.spaces.Discrete(n=2, start=1),  # 1=X, 2=O
+                "turn": gym.spaces.Discrete(n=2, start=1),
             }
         )
 
+        self.action_space = gym.spaces.Discrete(self.num_cols)
+
         self.pos_value_to_name = {0: "-", 1: "X", 2: "O"}
         self.col_id_to_name = {i: f"col-{i}" for i in range(self.num_cols)}
-
-        self.action_space = gym.spaces.Discrete(self.num_cols)
 
         self.board = None
         self.turn = None
@@ -30,12 +30,14 @@ class EnvConnect4(gym.Env):
     def _get_obs(self):
         return {"board": self.board, "turn": self.turn}
 
-    def _get_info(self):
+    def _get_info(self, winner=0, is_draw=False):
         return {
             "board": self.board,
             "turn": self.turn,
             "legal columns": self._get_legal_actions(),
             "count moves": self.count_moves,
+            "winner": winner,
+            "is_draw": is_draw,
         }
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -57,32 +59,25 @@ class EnvConnect4(gym.Env):
         return None
 
     def _get_legal_actions(self):
-        legal_cols = []
-        for col in range(self.num_cols):
-            if self.board[self._idx(0, col)] == 0:
-                legal_cols.append(col)
-        return legal_cols
+        return [col for col in range(self.num_cols)
+                if self.board[self._idx(0, col)] == 0]
 
     def is_winner(self, mark):
-        # Horizontal
         for row in range(self.num_rows):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row, col + i)] == mark for i in range(4)):
                     return True
 
-        # Vertical
         for row in range(self.num_rows - 3):
             for col in range(self.num_cols):
                 if all(self.board[self._idx(row + i, col)] == mark for i in range(4)):
                     return True
 
-        # Diagonal down-right
         for row in range(self.num_rows - 3):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row + i, col + i)] == mark for i in range(4)):
                     return True
 
-        # Diagonal up-right
         for row in range(3, self.num_rows):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row - i, col + i)] == mark for i in range(4)):
@@ -92,21 +87,42 @@ class EnvConnect4(gym.Env):
 
     def step(self, action):
         legal = self._get_legal_actions()
+
+        # Illegal move
         if action not in legal:
-            raise ValueError(f"Illegal action {action}. Legal columns are {legal}.")
+            reward = -1.0
+            terminated = True
+            truncated = False
+            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=0)
 
         self.count_moves += 1
 
         row = self._get_drop_row(action)
         self.board[self._idx(row, action)] = self.turn
 
-        reward = -0.01
-        terminated = True if self.is_winner(mark=self.turn) or len(self._get_legal_actions()) == 0 else False
+        winner = 0
+        is_draw = False
+
+        # Check win
+        if self.is_winner(self.turn):
+            winner = self.turn
+            terminated = True
+            reward = 1.0 if self.turn == 1 else -1.0
+        # Check draw
+        elif len(self._get_legal_actions()) == 0:
+            terminated = True
+            is_draw = True
+            reward = 0.5
+        else:
+            terminated = False
+            reward = -0.01  # small step penalty
+
         truncated = False
 
-        self.turn = 2 if self.turn == 1 else 1
+        if not terminated:
+            self.turn = 2 if self.turn == 1 else 1
 
-        return self._get_obs(), reward, terminated, truncated, self._get_info()
+        return self._get_obs(), reward, terminated, truncated, self._get_info(winner, is_draw)
 
     def print_current_board(self):
         print(f"Board after {self.count_moves} moves:")
@@ -115,11 +131,7 @@ class EnvConnect4(gym.Env):
             start = r * self.num_cols
             end = start + self.num_cols
             print(readable[start:end])
-        print("[0, 1, 2, 3, 4, 5, 6] (column ids)")
+        print("[0, 1, 2, 3, 4, 5, 6]")
 
     def check(self):
-        try:
-            check_env(self)
-            print("Environment passes all checks!")
-        except Exception as e:
-            print(f"Environment has issues: {e}")
+        check_env(self)
