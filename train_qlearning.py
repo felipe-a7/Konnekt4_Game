@@ -14,16 +14,7 @@ def train_q_learning_vs_random(
     seed: int = 7,
     log_every: int = 5000,
 ):
-    """
-    Trains a Q-learning agent as X (turn=1) against a random opponent O (turn=2).
 
-    Reward used for learning:
-    - env step reward: -0.01
-    - terminal shaping (added on top):
-        +1.0 if X wins
-        -1.0 if O wins
-        +0.5 if draw
-    """
     agent = PolicyQLearning(env, alpha=alpha, gamma=gamma, epsilon=epsilon_start, seed=seed)
     opponent = PolicyRandom()
 
@@ -36,7 +27,8 @@ def train_q_learning_vs_random(
         G = 0.0
 
         while not done:
-            # X (agent) move
+
+            # Opponent move
             if env.turn != 1:
                 a_opp = opponent._get_action(env, observation)
                 observation, _, terminated, truncated, info = env.step(a_opp)
@@ -46,45 +38,14 @@ def train_q_learning_vs_random(
             s = tuple(observation["board"]) + (int(observation["turn"]),)
 
             a = agent._get_action(env, observation)
-            obs_after_x, r_step_x, terminated, truncated, info_after_x = env.step(a)
+            obs_next, r, terminated, truncated, info_next = env.step(a)
             done = terminated or truncated
 
-            # If game ends after X move
-            if done:
-                if env.is_winner(mark=1):
-                    r_terminal = 1.0
-                elif env.is_winner(mark=2):
-                    r_terminal = -1.0
-                else:
-                    r_terminal = 0.5
+            s_next = tuple(obs_next["board"]) + (int(obs_next["turn"]),)
+            agent.update(s, a, r, s_next, info_next["legal columns"], done)
 
-                r_total = float(r_step_x) + float(r_terminal)
-                s_next = tuple(obs_after_x["board"]) + (int(obs_after_x["turn"]),)
-                agent.update(s, a, r_total, s_next, info_after_x["legal columns"], done=True)
-                G += r_total
-                break
-
-            # O (random opponent) move
-            a_opp = opponent._get_action(env, obs_after_x)
-            obs_after_o, _, terminated2, truncated2, info_after_o = env.step(a_opp)
-            done = terminated2 or truncated2
-
-            # Reward from X perspective after opponent response
-            if done:
-                if env.is_winner(mark=2):
-                    r_after = -1.0
-                else:
-                    r_after = 0.5
-            else:
-                r_after = 0.0
-
-            r_total = float(r_step_x) + float(r_after)
-
-            s_next = tuple(obs_after_o["board"]) + (int(obs_after_o["turn"]),)
-            agent.update(s, a, r_total, s_next, info_after_o["legal columns"], done=done)
-
-            observation, info = obs_after_o, info_after_o
-            G += r_total
+            observation = obs_next
+            G += r
 
         eps = max(epsilon_end, eps * epsilon_decay)
         agent.epsilon = eps
@@ -101,5 +62,5 @@ def train_q_learning_vs_random(
 
 if __name__ == "__main__":
     env = EnvConnect4()
-    agent, returns = train_q_learning_vs_random(env, episodes=50000)
+    agent, returns = train_q_learning_vs_random(env)
     print("Training finished. Q-table states:", len(agent.Q))
