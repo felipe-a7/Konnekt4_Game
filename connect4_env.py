@@ -59,25 +59,31 @@ class EnvConnect4(gym.Env):
         return None
 
     def _get_legal_actions(self):
-        return [col for col in range(self.num_cols)
-                if self.board[self._idx(0, col)] == 0]
+        return [
+            col for col in range(self.num_cols)
+            if self.board[self._idx(0, col)] == 0
+        ]
 
     def is_winner(self, mark):
+        # Horizontal
         for row in range(self.num_rows):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row, col + i)] == mark for i in range(4)):
                     return True
 
+        # Vertical
         for row in range(self.num_rows - 3):
             for col in range(self.num_cols):
                 if all(self.board[self._idx(row + i, col)] == mark for i in range(4)):
                     return True
 
+        # Diagonal down-right
         for row in range(self.num_rows - 3):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row + i, col + i)] == mark for i in range(4)):
                     return True
 
+        # Diagonal up-right
         for row in range(3, self.num_rows):
             for col in range(self.num_cols - 3):
                 if all(self.board[self._idx(row - i, col + i)] == mark for i in range(4)):
@@ -103,24 +109,25 @@ class EnvConnect4(gym.Env):
         winner = 0
         is_draw = False
 
-        # Check win
+        # Win check
         if self.is_winner(self.turn):
             winner = self.turn
             terminated = True
             reward = 1.0 if self.turn == 1 else -1.0
-        # Check draw
+
+        # Draw check
         elif len(self._get_legal_actions()) == 0:
             terminated = True
             is_draw = True
             reward = 0.5
+
+        # Continue game
         else:
             terminated = False
-            reward = -0.01  # small step penalty
+            reward = -0.01
+            self.turn = 2 if self.turn == 1 else 1  # Only works if game's not terminated
 
         truncated = False
-
-        if not terminated:
-            self.turn = 2 if self.turn == 1 else 1
 
         return self._get_obs(), reward, terminated, truncated, self._get_info(winner, is_draw)
 
