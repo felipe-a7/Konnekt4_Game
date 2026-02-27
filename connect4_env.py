@@ -1,9 +1,26 @@
+# connect4_env.py
+
 import gymnasium as gym
 from gymnasium.utils.env_checker import check_env
 from typing import Optional
 
 
 class EnvConnect4(gym.Env):
+    """
+    Connect4 Gymnasium Env.
+
+    Key design choice (IMPORTANT):
+    - Rewards are from the CURRENT/ACTING player's perspective.
+      * Win on your move: +1
+      * Lose (only happens via illegal move here): -1
+      * Draw: 0
+      * Otherwise: 0
+
+    This makes Q-learning consistent when the policy uses observation["turn"]
+    and acts for whichever player's turn it is.
+    """
+
+    metadata = {"render_modes": ["human"]}
 
     def __init__(self):
         super().__init__()
@@ -14,7 +31,7 @@ class EnvConnect4(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 "board": gym.spaces.MultiDiscrete([3] * (self.num_rows * self.num_cols)),
-                "turn": gym.spaces.Discrete(n=2, start=1),
+                "turn": gym.spaces.Discrete(n=2, start=1),  # 1 or 2
             }
         )
 
@@ -31,16 +48,16 @@ class EnvConnect4(gym.Env):
 
     def _get_obs(self):
         # Return a COPY so policies can't mutate env via observation
-        return {"board": self.board.copy(), "turn": self.turn}
+        return {"board": self.board.copy(), "turn": int(self.turn)}
 
     def _get_info(self, winner=0, is_draw=False):
         return {
             "board": self.board.copy(),
-            "turn": self.turn,
-            "legal columns": self._get_legal_actions(),
-            "count moves": self.count_moves,
-            "winner": winner,
-            "is_draw": is_draw,
+            "turn": int(self.turn),
+            "legal_columns": self._get_legal_actions(),
+            "count_moves": int(self.count_moves),
+            "winner": int(winner),
+            "is_draw": bool(is_draw),
         }
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -54,22 +71,21 @@ class EnvConnect4(gym.Env):
 
     # ---------- Pure game logic ----------
 
-    def _idx(self, row, col):
+    def _idx(self, row: int, col: int) -> int:
         return row * self.num_cols + col
 
-    def _get_drop_row(self, col):
+    def _get_drop_row(self, col: int) -> int:
+        # pieces fall to the bottom -> scan from bottom row up
         for row in range(self.num_rows - 1, -1, -1):
             if self.board[self._idx(row, col)] == 0:
                 return row
-        return -1  # safer than None
+        return -1
 
     def _get_legal_actions(self):
-        return [
-            col for col in range(self.num_cols)
-            if self.board[self._idx(0, col)] == 0
-        ]
+        # legal if top cell in the column is empty
+        return [col for col in range(self.num_cols) if self.board[self._idx(0, col)] == 0]
 
-    def is_winner(self, mark):
+    def is_winner(self, mark: int) -> bool:
         # Horizontal
         for row in range(self.num_rows):
             for col in range(self.num_cols - 3):
@@ -98,51 +114,53 @@ class EnvConnect4(gym.Env):
 
     # ---------- Gym step() ----------
 
-    def step(self, action):
+    def step(self, action: int):
         legal = self._get_legal_actions()
 
-        # Illegal move => acting player loses (cleanest)
+        # Illegal move => acting player immediately loses
         if action not in legal:
             terminated = True
             truncated = False
-            reward = 1.0 if self.turn == 2 else -1.0  # reward from Player 1 perspective
-            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=0)
+            reward = -1.0  # acting player loses
+            # winner is the OTHER player
+            winner = 2 if self.turn == 1 else 1
+            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=winner, is_draw=False)
 
         self.count_moves += 1
 
         row = self._get_drop_row(action)
         if row == -1:
-            # Defensive: should not happen due to legality check
+            # defensive fallback (should not happen if legal)
             terminated = True
             truncated = False
-            reward = 1.0 if self.turn == 2 else -1.0
-            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=0)
+            reward = -1.0
+            winner = 2 if self.turn == 1 else 1
+            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=winner, is_draw=False)
 
+        # Apply move for current player
         self.board[self._idx(row, action)] = self.turn
 
-        winner = 0
-        is_draw = False
-
-        # Win check
+        # Win check (current player just played)
         if self.is_winner(self.turn):
-            winner = self.turn
             terminated = True
-            reward = 1.0 if self.turn == 1 else -1.0  # P1 perspective
+            truncated = False
+            reward = +1.0
+            winner = self.turn
+            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=winner, is_draw=False)
 
         # Draw check
-        elif len(self._get_legal_actions()) == 0:
+        if len(self._get_legal_actions()) == 0:
             terminated = True
-            is_draw = True
-            reward = 0.0  # draw = 0 (MDP/Q-learning consistent)
+            truncated = False
+            reward = 0.0
+            return self._get_obs(), reward, terminated, truncated, self._get_info(winner=0, is_draw=True)
 
         # Continue game
-        else:
-            terminated = False
-            reward = 0.0  # no step penalty (consistent with your MDP/Q-learning write-up)
-            self.turn = 2 if self.turn == 1 else 1
-
+        self.turn = 2 if self.turn == 1 else 1
+        terminated = False
         truncated = False
-        return self._get_obs(), reward, terminated, truncated, self._get_info(winner, is_draw)
+        reward = 0.0
+        return self._get_obs(), reward, terminated, truncated, self._get_info(winner=0, is_draw=False)
 
     # ---------- Console helper ----------
 
@@ -153,7 +171,7 @@ class EnvConnect4(gym.Env):
             start = r * self.num_cols
             end = start + self.num_cols
             print(readable[start:end])
-        print("[0, 1, 2, 3, 4, 5, 6]")
+        print(list(range(self.num_cols)))
 
     def check(self):
         check_env(self)
