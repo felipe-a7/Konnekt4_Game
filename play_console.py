@@ -11,7 +11,7 @@
 
 from connect4_env import EnvConnect4
 from policies import PolicyRandom, PolicyHeuristic
-from train_qlearning import train_q_learning_vs_random
+from qlearning import train
 
 
 def play(env, opponents_policy=None, show_q_values: bool = False):
