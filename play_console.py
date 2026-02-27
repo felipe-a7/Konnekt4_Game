@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
         elif choice == "4":
             env = EnvConnect4()
-            agent, returns = train_q_learning_vs_random(env, episodes=50000)
+            agent = train(episodes=50000)
             play(env=EnvConnect4(), opponents_policy=agent, show_q_values=False)
 
         elif choice == "5":
