@@ -1,2 +1,3 @@
 # Konnekt4_Game
-An AI agent learns Konnekt4
+Can reinforcement learning learn to play Connect 4 better than simple rule-based reasoning?
+Random Vs Q-Learning Vs Heuristic
