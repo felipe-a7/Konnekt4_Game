@@ -225,13 +225,13 @@ def _has_safe_move(env: EnvConnect4, acting_piece: int, opp_piece: int) -> bool:
 @dataclass
 class TrainParams:
     episodes:      int   = 200_000
-    alpha_start:   float = 0.10
-    alpha_end:     float = 0.02
+    alpha_start:   float = 0.15
+    alpha_end:     float = 0.01
     gamma:         float = 0.99
     epsilon_start: float = 1.0
-    epsilon_decay: float = 0.999994   
-    epsilon_min:   float = 0.02
-    heuristic_prob: float = 0.85      
+    epsilon_decay: float = 0.999996   
+    epsilon_min:   float = 0.05
+    heuristic_prob: float = 0.80      
     seed:          int   = 42
     print_every:   int   = 5_000
     q_file:        str   = "q_table.pkl"
