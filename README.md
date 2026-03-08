@@ -19,7 +19,7 @@ This project implements a Connect-4 environment, baseline opponent policies, a f
 - `test_overfitting.py`  
   Extra evaluation script for robustness / generalization testing.
 
-- `play.py`  
+- `play-console.py`  
   Optional console play script.
 
 ---
